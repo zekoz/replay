@@ -6,6 +6,10 @@
 #include <QTcpServer>
 #include <QWidget>
 #include <QApplication>
+#include <QFileDialog>
+#include <QPushButton>
+#include <QMainWindow>
+#include <QHBoxLayout>
 
 #include "replayer.h"
 
@@ -36,9 +40,21 @@ QByteArray Replay::packetData(quint64 index) {
   return packets_[index].data;
 }
 
+void Replay::pause() {
+  timer_->stop();
+  playback_time_ms_ += (timer_->interval() - timer_->remainingTime()) *
+                       playback_speed_;
+  playback_speed_ = 0;
+}
+
 void Replay::start(int playback_speed = 1) {
+  bool start_loop = playback_speed_ != 0;
+
   playback_speed_ = playback_speed;
-  loop();
+
+  if (start_loop) {
+    loop();
+  }
 }
 
 void Replay::loop() {
@@ -101,7 +117,6 @@ ReplayConnection::ReplayConnection(QObject* parent, Replay* replay,
 void ReplayConnection::handleRead() {
   socket_->read(socket_->bytesAvailable());
   if (!is_active_) {
-    replay_->start(10);
     is_active_ = true;
     connect(replay_, &Replay::packet, this, &ReplayConnection::sendPackets);
     sendPackets(replay_->currentIndex());
@@ -115,23 +130,90 @@ void ReplayConnection::sendPackets(quint64 index) {
   }
 }
 
-int main(int argc, char **argv) {
-  QApplication* app = new QApplication(argc, argv);
-  QFile* input = new QFile(argv[1], app);
+ReplayWindow::ReplayWindow(QWidget* parent = nullptr)
+    : QMainWindow(parent, Qt::WindowStaysOnTopHint) {
+  load_button_ = new QPushButton("Load");
+  connect(load_button_, &QPushButton::clicked, load_button_, [=]() {
+    QFileDialog* dlg = new QFileDialog(this);
+    connect(dlg, &QFileDialog::fileSelected, this, &ReplayWindow::loadFile);
+    dlg->show();
+  });
+
+  pause_button_ = new QPushButton("||");
+  connect(pause_button_, &QPushButton::clicked, this, [=]() {
+    pause_button_->setEnabled(false);
+    replay_->pause();
+  });
+  pause_button_->setEnabled(false);
+
+  play_button_ = new QPushButton(">");
+  connect(play_button_, &QPushButton::clicked, this, [=]() {
+    pause_button_->setEnabled(true);
+    replay_->start(1);
+  });
+  play_button_->setEnabled(false);
+
+  ff2_button_ = new QPushButton("2x");
+  connect(ff2_button_, &QPushButton::clicked, this, [=]() {
+    pause_button_->setEnabled(true);
+    replay_->start(2);
+  });
+  ff2_button_->setEnabled(false);
+
+  ff4_button_ = new QPushButton("4x");
+  connect(ff4_button_, &QPushButton::clicked, this, [=]() {
+    pause_button_->setEnabled(true);
+    replay_->start(4);
+  });
+  ff4_button_->setEnabled(false);
+
+  ff8_button_ = new QPushButton("8x");
+  connect(ff8_button_, &QPushButton::clicked, this, [=]() {
+    pause_button_->setEnabled(true);
+    replay_->start(8);
+  });
+  ff8_button_->setEnabled(false);
+
+  QHBoxLayout* layout = new QHBoxLayout;
+  layout->addWidget(load_button_);
+  layout->addWidget(pause_button_);
+  layout->addWidget(play_button_);
+  layout->addWidget(ff2_button_);
+  layout->addWidget(ff4_button_);
+  layout->addWidget(ff8_button_);
+
+  this->setCentralWidget(new QWidget);
+  this->centralWidget()->setLayout(layout);
+  show();
+}
+
+void ReplayWindow::loadFile(QString path) {
+  QFile* input = new QFile(path, this);
   input->open(QIODevice::ReadOnly);
 
   std::vector<Packet> ps(parse(input));
-  qInfo("parsed %d", ps.size());
-  Replay* replay = new Replay(app, std::move(ps));
 
-  QTcpServer* server = new QTcpServer(app);
+  qInfo("parsed %d", ps.size());
+  replay_ = new Replay(this, std::move(ps));
+
+  play_button_->setEnabled(true);
+  ff2_button_->setEnabled(true);
+  ff4_button_->setEnabled(true);
+  ff8_button_->setEnabled(true);
+  QTcpServer* server = new QTcpServer(this);
   QObject::connect(server, &QTcpServer::newConnection, [=]() {
     QTcpSocket *sock = server->nextPendingConnection();
-    ReplayConnection *conn = new ReplayConnection(app, replay, sock);
+    ReplayConnection *conn = new ReplayConnection(this, replay_, sock);
     QObject::connect(sock, &QIODevice::readyRead, conn,
                      &ReplayConnection::handleRead);
   });
   server->listen(QHostAddress::Any, 5678);
+}
 
-  app->exec();
+int main(int argc, char **argv) {
+  QApplication app(argc, argv);
+
+  ReplayWindow window;
+
+  app.exec();
 }

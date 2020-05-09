@@ -1,6 +1,8 @@
 #include <QObject>
 #include <QTimer>
 #include <QTcpSocket>
+#include <QPushButton>
+#include <QMainWindow>
 
 struct Packet {
   quint64 time;
@@ -24,12 +26,13 @@ class Replay : public QObject {
 
  public:
   Replay(QObject* parent, std::vector<Packet> packets);
-  void start(int playback_speed);
   quint64 currentIndex();
   QByteArray packetData(quint64 index);
 
  public slots:
   void loop();
+  void pause();
+  void start(int playback_speed);
 
  signals:
   void packet(quint64 index);
@@ -49,4 +52,27 @@ class ReplayConnection : public QObject {
   ReplayConnection(QObject* parent, Replay* replay, QTcpSocket* socket);
   void handleRead();
   void sendPackets(quint64 index);
+};
+
+class ReplayWindow : public QMainWindow {
+  Q_OBJECT
+
+  Replay* replay_;
+
+  QPushButton* load_button_;
+
+  QPushButton* pause_button_;
+  QPushButton* play_button_;
+  QPushButton* ff2_button_;
+  QPushButton* ff4_button_;
+  QPushButton* ff8_button_;
+
+ public:
+  ReplayWindow(QWidget* parent);
+ 
+ public slots:
+  void loadFile(QString file);
+
+ signals:
+  void packet(quint64 index);
 };
