@@ -36,13 +36,13 @@ steps:
   - script: |
       cd $(Build.SourcesDirectory)
       call "C:\\Program Files (x86)\\Microsoft Visual Studio\\2017\\Enterprise\\VC\\Auxiliary\\Build\\vcvars64.bat"
-      nmake
+      nmake release
     displayName: 'Build!'
   # 4
   - task: CopyFiles@2
     inputs:
       contents: |
-        $(Build.SourcesDirectory)\\replay.exe
+        $(Build.SourcesDirectory)\\release\\replay.exe
       targetFolder: $(Build.ArtifactStagingDirectory)
   - task: PublishBuildArtifacts@1
     inputs:
