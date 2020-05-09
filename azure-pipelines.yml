@@ -46,7 +46,7 @@ steps:
   - task: CopyFiles@2
     inputs:
       contents: |
-        $(Build.SourcesDirectory)\\release\\*
+        $(Build.SourcesDirectory)\\release\\**
       targetFolder: $(Build.ArtifactStagingDirectory)
   - task: PublishBuildArtifacts@1
     inputs:
